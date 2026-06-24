@@ -6,3 +6,25 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+
+# IDE files
+.vscode/
+.hintrc
+
+# STM32CubeIDE
+.project
+.cproject
+.settings/
+Debug/
+Release/
+*.launch
+*.elf
+*.map
+*.hex
+*.bin
+*.su
+.mxproject
+
+# Spyder
+.spyderproject
+.spyproject
