@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VCU SIMULATED TELEMETRY PANEL</title>
+    <style>
+        body { 
+            background-color: #030704; color: #33ff66; 
+            font-family: 'Courier New', Courier, monospace; margin: 0; padding: 10px;
+            text-shadow: 0 0 4px rgba(51,255,102,0.65);
+            background-image: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 6px 100%;
+        }
+        .crt-frame {
+            border: 4px double #33ff66; border-radius: 12px; max-width: 820px;
+            margin: 0 auto; padding: 15px; background: rgba(5,15,5,0.9);
+            box-shadow: inset 0 0 30px rgba(0,255,102,0.15), 0 0 15px rgba(0,255,102,0.1);
+        }
+        header { text-align: center; border-bottom: 2px dashed #33ff66; padding-bottom: 10px; margin-bottom: 20px; }
+        
+        .grid-core { display: flex; flex-direction: row; flex-wrap: wrap; gap: 20px; justify-content: center; }
+        .column-left { flex: 1 1 320px; max-width: 100%; }
+        .column-right { flex: 1.2 1 400px; max-width: 100%; }
+        
+        .sub-panel { border: 1px solid #33ff66; padding: 15px; border-radius: 6px; background: rgba(0,20,5,0.4); margin-bottom: 15px; }
+        .sub-panel-title { font-weight: bold; background: #33ff66; color: #030704; padding: 2px 6px; font-size: 0.85rem; display: inline-block; margin-bottom: 12px; }
+        
+        .neon-btn { 
+            background: transparent; border: 1px solid #33ff66; color: #33ff66;
+            font-family: 'Courier New', monospace; font-weight: bold; padding: 12px; 
+            border-radius: 4px; cursor: pointer; transition: all 0.15s ease; width: 100%; min-height: 44px;
+        }
+        .neon-btn:hover { background: #33ff66; color: #030704; box-shadow: 0 0 10px #33ff66; }
+        .neon-btn:active { transform: scale(0.98); }
+        
+        .state-bay { display: flex; gap: 8px; }
+        .state-node { flex: 1; border: 1px dashed #33ff66; text-align: center; padding: 8px 0; font-size: 0.75rem; font-weight: bold; color: rgba(51,255,102,0.4); cursor: pointer; min-height: 20px;}
+        .state-node.active.normal { color: #33ff66; border-style: solid; background: rgba(51,255,102,0.2); }
+        .state-node.active.sport { color: #00ffff; border-color: #00ffff; border-style: solid; background: rgba(0,255,255,0.2); text-shadow: 0 0 6px #00ffff; }
+        .state-node.active.fault { color: #ff3333; border-color: #ff3333; border-style: solid; background: rgba(255,51,51,0.25); text-shadow: 0 0 6px #ff3333; }
+        
+        .speed-rack { display: flex; align-items: center; gap: 10px; margin-top: 5px; }
+        .slider-retro { -webkit-appearance: none; appearance: none; width: 100%; background: #112211; border: 1px solid #33ff66; height: 12px; border-radius: 4px; }
+        .slider-retro::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; background: #33ff66; cursor: pointer; border-radius: 4px; }
+
+        .num-input-retro {
+            background: #001100; border: 1px solid #33ff66; color: #33ff66;
+            font-family: monospace; font-size: 1rem; padding: 6px; width: 75px; text-align: center;
+            border-radius: 4px; text-shadow: 0 0 4px #33ff66;
+        }
+
+        .meter-rack { background: #001100; border: 1px solid #33ff66; height: 22px; border-radius: 3px; overflow: hidden; position: relative; margin-top: 5px;}
+        .meter-fill { height: 100%; width: 0%; background: #33ff66; box-shadow: 0 0 8px #33ff66; transition: width 0.08s linear; }
+        
+        #radarGrid { background: #020803; border: 1px solid #33ff66; display: block; border-radius: 4px; width: 100%; height: auto; max-width: 100%; }
+        
+        .d-matrix { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
+        .d-core-btn { background: rgba(0,30,5,0.6); border: 1px solid #33ff66; color: #33ff66; font-family: monospace; font-weight: bold; padding: 16px 0; font-size: 1rem; cursor: pointer; -webkit-user-select: none; user-select: none; min-height: 48px; border-radius: 4px;}
+        .d-core-btn:active { background: #33ff66; color: #030704; box-shadow: 0 0 10px #33ff66; }
+        .d-pivot { font-size: 0.7rem; background: rgba(0,40,30,0.4); border-color: #00ffff; color: #00ffff; text-shadow: 0 0 4px #00ffff;}
+        .d-pivot:active { background: #00ffff; color: #030704; box-shadow: 0 0 10px #00ffff;}
+
+        #diagStatus { font-weight: bold; font-size: 0.85rem; margin-top: 12px; padding: 6px; border-top: 1px dashed rgba(51,255,102,0.3); text-align: center; }
+        .system-ok { color: #33ff66; }
+        .system-err { color: #ff3333; animation: blinker 0.8s infinite linear; text-shadow: 0 0 6px #ff3333; }
+        @keyframes blinker { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    </style>
+</head>
+<body>
+
+<div class="crt-frame">
+    <header>
+        <div style="font-size: 1.2rem; font-weight: bold; letter-spacing: 2px;">VEHICLE CONTROL UNIT (VCU) PRIMARY TELEMETRY CONSOLE</div>
+        <div style="font-size: 0.75rem; color: rgba(51,255,102,0.6); margin-top: 4px;">EMBEDDED CONTROL MATRIX LAYER ACCESS</div>
+    </header>
+
+    <div class="grid-core">
+        <div class="column-left">
+            <div class="sub-panel">
+                <div class="sub-panel-title">BLE LINK CONTROL</div>
+                <button id="bleBtn" class="neon-btn" onclick="connectBLE()">INITIALIZE SERIAL LINK</button>
+            </div>
+
+            <div class="sub-panel">
+                <div class="sub-panel-title">FSM CONTROL</div>
+                <div class="state-bay">
+                    <div id="fsmNormal" class="state-node active normal" onclick="sendPayload('STATE:NORMAL')">NORMAL</div>
+                    <div id="fsmSport" class="state-node sport" onclick="sendPayload('STATE:SPORT')">SPORT</div>
+                    <div id="fsmFault" class="state-node fault">FAULT</div>
+                </div>
+                <div id="diagStatus" class="system-ok">STATUS: VCU LOGIC OPERATIONAL</div>
+                <button id="clearFaultBtn" class="neon-btn" style="border-color: #ff3333; color: #ff3333; margin-top: 10px; display: none;" onclick="sendPayload('STATE:RESET')">ACKNOWLEDGE & RESET SYSTEM FAULT</button>
+            </div>
+
+            <div class="sub-panel">
+                <div class="sub-panel-title">THROTTLE INPUT LEVEL (u)</div>
+                <div class="speed-rack">
+                    <input type="range" id="speedSlider" class="slider-retro" min="0" max="100" value="40" oninput="updateSpeedSetting(this.value)">
+                    <span id="speedTxt" style="font-family: monospace; font-weight: bold; width: 40px; text-align:right;">40%</span>
+                </div>
+            </div>
+
+            <div class="sub-panel">
+                <div class="sub-panel-title">SIMULATED CURRENT TRIP LIMIT</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-size: 0.75rem; color: rgba(51,255,102,0.7);">Trip Threshold:</span>
+                    <input type="number" id="limitInput" class="num-input-retro" value="1.20" step="0.05" onchange="updateLimitSetting(this.value)">
+                </div>
+            </div>
+
+            <div class="sub-panel">
+                <div class="sub-panel-title">MEASURED MOTOR CURRENT CONSUMPTION</div>
+                <div class="meter-rack"><div id="curBar" class="meter-fill"></div></div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.7rem; margin-top: 4px; color: rgba(51,255,102,0.7);">
+                    <span>0.15A QUIESCENT</span>
+                    <span id="curValue" style="color: #ffffff; font-weight: bold;">0.15 A</span>
+                    <span id="lblLimit" style="color:#ff3333; font-weight:bold;">1.20A TRIP CEILING</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="column-right">
+            <div class="sub-panel" style="margin-bottom: 12px;">
+                <div class="sub-panel-title">REAL-TIME POSITION & ODOMETRY PLOT</div>
+                <canvas id="radarGrid" width="410" height="260"></canvas>
+                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-family: monospace; margin-top: 6px; color: rgba(51,255,102,0.8);">
+                    <span>X: <span id="lblX" style="color:#fff">0.0</span> cm</span>
+                    <span>Y: <span id="lblY" style="color:#fff">0.0</span> cm</span>
+                    <span>HEADING: <span id="lblYaw" style="color:#00ffff">0.0°</span></span>
+                </div>
+            </div>
+
+            <div class="sub-panel">
+                <div class="sub-panel-title">MANUAL MOTION CONTROL OVERRIDE</div>
+                <div class="d-matrix">
+                    <button class="d-core-btn d-pivot" onclick="sendPayload('CMD:TURN_90_L')">EXECUTE PIVOT 90° CCW</button>
+                    <button class="d-core-btn" onmousedown="sendPayload('DRV:FWD')" onmouseup="sendPayload('DRV:STOP')" onmouseleave="sendPayload('DRV:STOP')" ontouchstart="sendPayload('DRV:FWD')" ontouchend="sendPayload('DRV:STOP')">FWD</button>
+                    <button class="d-core-btn d-pivot" onclick="sendPayload('CMD:TURN_90_R')">EXECUTE PIVOT 90° CW</button>
+                    
+                    <button class="d-core-btn" onmousedown="sendPayload('TRN:LEFT')" onmouseup="sendPayload('DRV:STOP')" onmouseleave="sendPayload('DRV:STOP')" ontouchstart="sendPayload('TRN:LEFT')" ontouchend="sendPayload('DRV:STOP')">MANUAL TURN CCW</button>
+                    <button class="d-core-btn" style="color:#ff3333; border-color:#ff3333; background:rgba(40,0,0,0.3);" onmousedown="sendPayload('DRV:STOP')" ontouchstart="sendPayload('DRV:STOP')">EMERGENCY HALT</button>
+                    <button class="d-core-btn" onmousedown="sendPayload('TRN:RIGHT')" onmouseup="sendPayload('DRV:STOP')" onmouseleave="sendPayload('DRV:STOP')" ontouchstart="sendPayload('TRN:RIGHT')" ontouchend="sendPayload('DRV:STOP')">MANUAL TURN CW</button>
+                    
+                    <button class="neon-btn" style="font-size: 0.7rem; padding: 4px;" onclick="sendPayload('CMD:ZERO')">RESET ODOMETRY VIEW</button>
+                    <button class="d-core-btn" onmousedown="sendPayload('DRV:REV')" onmouseup="sendPayload('DRV:STOP')" onmouseleave="sendPayload('DRV:STOP')" ontouchstart="sendPayload('DRV:REV')" ontouchend="sendPayload('DRV:STOP')">REV</button>
+                    <div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+    const RX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+    const TX_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+
+    let bluetoothNode, rxWire, txWire;
+    let traceVector = [{x: 0, y: 0}];
+    
+    const radarScreen = document.getElementById('radarGrid');
+    const drawCtx = radarScreen.getContext('2d');
+    const midPointX = radarScreen.width / 2;
+    const midPointY = radarScreen.height / 2;
+
+    // --- FIXED: Replaced Hardcoded typos with Explicit Constant bindings ---
+    function connectBLE() {
+        if (bluetoothNode && bluetoothNode.gatt.connected) { bluetoothNode.disconnect(); return; }
+        
+        navigator.bluetooth.requestDevice({ filters: [{ services: [UART_SERVICE_UUID] }] })
+        .then(res => { bluetoothNode = res; res.addEventListener('gattserverdisconnected', onLinkLoss); return res.gatt.connect(); })
+        .then(server => server.getPrimaryService(UART_SERVICE_UUID))
+        .then(service => Promise.all([service.getCharacteristic(RX_UUID), service.getCharacteristic(TX_UUID)]))
+        .then(chars => {
+            rxWire = chars[0]; txWire = chars[1];
+            txWire.startNotifications().then(_ => txWire.addEventListener('characteristicvaluechanged', processInboundPacket));
+            document.getElementById('bleBtn').innerText = "TERMINATE HARDWARE LINK";
+            document.getElementById('bleBtn').style.borderColor = "#ff3333";
+            document.getElementById('bleBtn').style.color = "#ff3333";
+        }).catch(err => console.log(err));
+    }
+
+    function onLinkLoss() {
+        document.getElementById('bleBtn').innerText = "INITIALIZE SERIAL LINK";
+        document.getElementById('bleBtn').style.borderColor = "#33ff66";
+        document.getElementById('bleBtn').style.color = "#33ff66";
+        rxWire = null;
+    }
+
+    function sendPayload(payload) {
+        if (!rxWire) return;
+        rxWire.writeValue(new TextEncoder().encode(payload + "\n"));
+    }
+
+    function updateSpeedSetting(value) {
+        document.getElementById('speedTxt').innerText = value + "%";
+        sendPayload("SET_SPD:" + value);
+    }
+
+    function updateLimitSetting(value) {
+        let valFloat = parseFloat(value);
+        if(isNaN(valFloat)) valFloat = 1.20;
+        sendPayload("SET_LMT:" + valFloat.toFixed(2));
+    }
+
+    function processInboundPacket(event) {
+        const streamStr = new TextDecoder().decode(event.target.value).trim();
+        const telemetryTokens = streamStr.split('|'); // Layout Schema: YAW|X|Y|CUR|STATE|LIMIT|FAULT_CODE
+        if(telemetryTokens.length < 5) return;
+
+        const headingAngle = parseFloat(telemetryTokens[0]);
+        const locX = parseFloat(telemetryTokens[1]);
+        const locY = parseFloat(telemetryTokens[2]);
+        const totalAmps = parseFloat(telemetryTokens[3]);
+        const fsmInteger = parseInt(telemetryTokens[4]);
+        const edgeLimit = telemetryTokens[5] ? parseFloat(telemetryTokens[5]) : 1.20;
+        const faultCode = telemetryTokens[6] ? parseInt(telemetryTokens[6]) : 0;
+
+        if (edgeLimit >= 0.0 && totalAmps > edgeLimit && fsmInteger !== 3) {
+            console.warn("⚠️ SHUTDOWN TRIGGERED VIA INTERFACE CONTROL LAYER");
+            sendPayload("CMD:FAULT"); 
+            return;
+        }
+
+        document.getElementById('lblYaw').innerText = headingAngle.toFixed(1) + "°";
+        document.getElementById('lblX').innerText = locX.toFixed(1);
+        document.getElementById('lblY').innerText = locY.toFixed(1);
+        document.getElementById('curValue').innerText = totalAmps.toFixed(2) + " A";
+        
+        document.getElementById('lblLimit').innerText = edgeLimit < 0.0 ? "∞ INF CEILING" : edgeLimit.toFixed(2) + "A TRIP CEILING";
+
+        const ceilingRef = edgeLimit < 0.0 ? 2.0 : edgeLimit;
+        const rawAmpPercent = Math.min((totalAmps / ceilingRef) * 100, 100);
+        const barTarget = document.getElementById('curBar');
+        barTarget.style.width = rawAmpPercent + "%";
+        
+        if(edgeLimit >= 0.0 && totalAmps > (edgeLimit * 0.85)) barTarget.style.background = "#ff3333";
+        else if(edgeLimit >= 0.0 && totalAmps > (edgeLimit * 0.5)) barTarget.style.background = "#ffaa00";
+        else barTarget.style.background = "#33ff66";
+
+        const statusEl = document.getElementById('diagStatus');
+        if (fsmInteger === 3) {
+            statusEl.className = "system-err";
+            if (faultCode === 1)      statusEl.innerText = "CRITICAL FAULT: TRANSIENT HARDWARE OVER-CURRENT";
+            else if (faultCode === 2) statusEl.innerText = "CRITICAL FAULT: MECHANICAL DRIVETRAIN STALL DETECTED";
+            else if (faultCode === 3) statusEl.innerText = "CRITICAL FAULT: CLOSED-LOOP ORIENTATION TIMEOUT WATCHDOG";
+            else                      statusEl.innerText = "CRITICAL FAULT: SEGMENTATION EXCEPTION FAULT";
+        } else {
+            statusEl.className = "system-ok";
+            statusEl.innerText = "STATUS: VCU LOGIC OPERATIONAL";
+        }
+
+        document.getElementById('fsmNormal').className = "state-node normal" + (fsmInteger === 1 ? " active normal" : "");
+        document.getElementById('fsmSport').className = "state-node sport" + (fsmInteger === 2 ? " active sport" : "");
+        document.getElementById('fsmFault').className = "state-node fault" + (fsmInteger === 3 ? " active fault" : "");
+        document.getElementById('clearFaultBtn').style.display = (fsmInteger === 3) ? "block" : "none";
+
+        if(streamStr.includes("CMD:ZERO") || fsmInteger === 0) {
+            traceVector = [{x: locX, y: locY}];
+        }
+        plotTelemetryVector(locX, locY, headingAngle);
+    }
+
+    function plotTelemetryVector(currentX, currentY, orientationAngle) {
+        const scale = 2.0; 
+        
+        if(traceVector.length === 0 || traceVector[traceVector.length-1].x !== currentX || traceVector[traceVector.length-1].y !== currentY) {
+            traceVector.push({x: currentX, y: currentY});
+        }
+
+        drawCtx.clearRect(0, 0, radarScreen.width, radarScreen.height);
+        
+        drawCtx.strokeStyle = "rgba(51,255,102,0.06)"; drawCtx.lineWidth = 1;
+        for(let idx=0; idx<radarScreen.width; idx+=25) { drawCtx.beginPath(); drawCtx.moveTo(idx,0); drawCtx.lineTo(idx,radarScreen.height); drawCtx.stroke(); }
+        for(let idx=0; idx<radarScreen.height; idx+=25) { drawCtx.beginPath(); drawCtx.moveTo(0,idx); drawCtx.lineTo(radarScreen.width,idx); drawCtx.stroke(); }
+
+        if (traceVector.length > 1) {
+            for(let i = 1; i < traceVector.length; i++) {
+                const x1 = midPointX + (traceVector[i-1].x - currentX) * scale;
+                const y1 = midPointY - (traceVector[i-1].y - currentY) * scale;
+                const x2 = midPointX + (traceVector[i].x - currentX) * scale;
+                const y2 = midPointY - (traceVector[i].y - currentY) * scale;
+                
+                drawCtx.beginPath();
+                drawCtx.moveTo(x1, y1);
+                drawCtx.lineTo(x2, y2);
+                
+                if (i > traceVector.length - 15) {
+                    drawCtx.strokeStyle = "#33ff66"; drawCtx.lineWidth = 2.5;
+                } else {
+                    drawCtx.strokeStyle = "#223322"; drawCtx.lineWidth = 1.5;
+                }
+                drawCtx.stroke();
+            }
+        }
+
+        const orientationRadians = -orientationAngle * (Math.PI / 180);
+        drawCtx.save();
+        drawCtx.translate(midPointX, midPointY);
+        drawCtx.rotate(orientationRadians);
+        drawCtx.beginPath();
+        drawCtx.moveTo(14, 0);   
+        drawCtx.lineTo(-8, 7);  
+        drawCtx.lineTo(-8, -7); 
+        drawCtx.closePath();
+        drawCtx.fillStyle = "#00ffff"; drawCtx.shadowColor = "#00ffff"; drawCtx.shadowBlur = 6; drawCtx.fill();
+        drawCtx.restore();
+    }
+    
+    plotTelemetryVector(0,0,0);
+</script>
+</body>
+</html>

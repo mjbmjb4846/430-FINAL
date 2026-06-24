@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32-C3 DRV8833 & BNO085 Testbench</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #121214; color: #e1e1e6; padding: 20px; max-width: 800px; margin: 0 auto; }
+        h1 { text-align: center; color: #4af; font-size: 1.5rem; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #7c7c8a; font-size: 0.9rem; margin-bottom: 25px; }
+        .card { background: #202024; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #29292e; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .btn { display: block; width: 100%; background: #00875f; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; font-size: 1rem; cursor: pointer; transition: background 0.2s; }
+        .btn:hover { background: #00a372; }
+        .btn.disconnect { background: #ab222e; }
+        .btn.disconnect:hover { background: #cc2e3b; }
+        .motor-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+        .motor-block { background: #121214; padding: 15px; border-radius: 8px; border: 1px solid #29292e; text-align: center; }
+        .motor-title { font-weight: bold; color: #4af; margin-bottom: 10px; border-bottom: 1px solid #29292e; padding-bottom: 5px; }
+        .status-container { display: flex; justify-content: space-between; font-size: 0.85rem; color: #7c7c8a; margin-bottom: 10px; }
+        .status-val { font-weight: bold; color: #ffb84d; }
+        .status-val.connected { color: #04d361; }
+        .slider-label { display: block; font-size: 0.8rem; color: #7c7c8a; margin-top: 8px; }
+        input[type=range] { width: 100%; margin: 10px 0; background: #323238; border-radius: 4px; height: 6px; -webkit-appearance: none; appearance: none; }
+        .visualizer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+        .viz-box { background: #121214; border: 1px solid #29292e; border-radius: 8px; padding: 10px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px;}
+        .viz-title { font-size: 0.85rem; color: #7c7c8a; margin-bottom: 10px; font-weight: bold; }
+        #compass { width: 130px; height: 130px; transition: transform 0.05s linear; }
+        canvas { background: #121214; border-radius: 4px; width: 100%; max-width: 180px; height: 140px; }
+        kbd { background: #323238; color: #4af; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        .step-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 320px; margin: 15px auto 0 auto; }
+        .step-btn { background: #323238; border: 1px solid #41414c; color: #e1e1e6; font-weight: bold; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;}
+        .step-btn:hover { background: #41414c; color: #4af; }
+        .step-btn:active { background: #4af; color: #121214; }
+        
+        /* Odometer Panel Stylings */
+        .odo-container { display: flex; justify-content: space-around; width: 100%; margin-top: 8px; font-size: 0.8rem; text-align: left; background: #1a1a1e; padding: 8px; border-radius: 6px; border: 1px solid #29292e;}
+        .odo-val { color: #04d361; font-family: monospace; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>DRV8833 & BNO085 Testbench</h1>
+    <div class="subtitle">Seeed Studio ESP32-C3 Control Center</div>
+
+    <div class="card">
+        <div class="status-container">
+            <span>Status: <span id="status" class="status-val">Disconnected</span></span>
+            <span>Target: <span id="targetDevice" class="status-val">-</span></span>
+        </div>
+        <button id="connectBtn" class="btn" onclick="toggleConnection()">Connect over BLE</button>
+    </div>
+
+    <div class="card">
+        <div class="visualizer-grid">
+            <div class="viz-box">
+                <div class="viz-title">2D Heading (Yaw: <span id="yawVal">0</span>°)</div>
+                <svg id="compass" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="#29292e" stroke-width="3"/>
+                    <polygon points="50,15 42,45 50,38 58,45" fill="#ab222e" />
+                    <polygon points="50,85 42,55 50,62 58,55" fill="#7c7c8a" />
+                    <text x="50" y="12" font-size="10" font-weight="bold" fill="#e1e1e6" text-anchor="middle">N</text>
+                </svg>
+                <button class="step-btn" style="margin-top: 12px; font-size: 0.75rem; padding: 6px 12px; width: 100%; max-width:160px; color:#ffb84d; border-color:#ffb84d44;" onclick="sendCmd('RESET_GYRO')">Zero Counters & Gyro</button>
+            </div>
+            <div class="viz-box">
+                <div class="viz-title">3D Orientation Cube</div>
+                <canvas id="cubeCanvas"></canvas>
+            </div>
+        </div>
+        
+        <div class="motor-controls" style="margin-top: 15px;">
+            <div class="odo-container">
+                <div>Left Ticks: <span id="ticksL" class="odo-val">0</span></div>
+                <div>Left Dist: <span id="distL" class="odo-val">0.0</span> cm</div>
+            </div>
+            <div class="odo-container">
+                <div>Right Ticks: <span id="ticksR" class="odo-val">0</span></div>
+                <div>Right Dist: <span id="distR" class="odo-val">0.0</span> cm</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="viz-title" style="text-align:center; margin-bottom: 2px;">Discrete Step Execution Profiles</div>
+        <div class="step-grid">
+            <td></td>
+            <button class="step-btn" onclick="sendCmd('FWD')">▲ Fwd</button>
+            <td></td>
+            
+            <button class="step-btn" onclick="sendCmd('TRN_L')">◀ 90° L</button>
+            <button class="step-btn" style="background:#ab222e22; border-color:#ab222e44; color:#ab222e;" onclick="emergencyStop()">STOP</button>
+            <button class="step-btn" onclick="sendCmd('TRN_R')">90° R ▶</button>
+            
+            <td></td>
+            <button class="step-btn" onclick="sendCmd('REV')">▼ Rev</button>
+            <td></td>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="motor-controls">
+            <div class="motor-block">
+                <div class="motor-title">Left Motor (A)</div>
+                <input type="range" id="sliderA" min="-255" max="255" value="0" oninput="updateSliders()">
+                <span class="slider-label">Value: <span id="valA">0</span></span>
+            </div>
+            <div class="motor-block">
+                <div class="motor-title">Right Motor (B)</div>
+                <input type="range" id="sliderB" min="-255" max="255" value="0" oninput="updateSliders()">
+                <span class="slider-label">Value: <span id="valB">0</span></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+        const RX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+        const TX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+
+        let bleDevice = null, gattServer = null, rxCharacteristic = null, txCharacteristic = null;
+        let activeKeys = {};
+
+        const canvas = document.getElementById('cubeCanvas');
+        const ctx = canvas.getContext('2d');
+        let currentQ = [1, 0, 0, 0]; 
+
+        const vertices = [
+            [-1,-1,-1], [1,-1,-1], [1,1,-1], [-1,1,-1],
+            [-1,-1,1],  [1,-1,1],  [1,1,1],  [-1,1,1]
+        ].map(v => v.map(c => c * 35)); 
+
+        const edges = [
+            [0,1], [1,2], [2,3], [3,0], [4,5], [5,6], [6,7], [7,4], [0,4], [1,5], [2,6], [3,7]
+        ];
+
+        function initCanvas() {
+            canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight;
+            renderCube();
+        }
+        window.addEventListener('resize', initCanvas);
+
+        async function toggleConnection() {
+            if (bleDevice && bleDevice.gatt.connected) { bleDevice.disconnect(); return; }
+            try {
+                document.getElementById('status').innerText = "Scanning...";
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: [UART_SERVICE_UUID] }]
+                });
+                gattServer = await bleDevice.gatt.connect();
+                const service = await gattServer.getPrimaryService(UART_SERVICE_UUID);
+                rxCharacteristic = await service.getCharacteristic(RX_CHARACTERISTIC_UUID);
+                txCharacteristic = await service.getCharacteristic(TX_CHARACTERISTIC_UUID);
+
+                await txCharacteristic.startNotifications();
+                txCharacteristic.addEventListener('characteristicvaluechanged', handleTelemetry);
+
+                document.getElementById('status').innerText = "Connected";
+                document.getElementById('status').className = "status-val connected";
+                document.getElementById('targetDevice').innerText = bleDevice.name || "ESP32-C3 Testbench";
+                document.getElementById('connectBtn').innerText = "Disconnect";
+                document.getElementById('connectBtn').className = "btn disconnect";
+                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+                initCanvas();
+            } catch (error) { console.log(error); onDisconnected(); }
+        }
+
+        function onDisconnected() {
+            document.getElementById('status').innerText = "Disconnected";
+            document.getElementById('status').className = "status-val";
+            document.getElementById('targetDevice').innerText = "-";
+            document.getElementById('connectBtn').innerText = "Connect over BLE";
+            document.getElementById('connectBtn').className = "btn";
+            bleDevice = null; rxCharacteristic = null; txCharacteristic = null;
+            resetSliders();
+        }
+
+        function handleTelemetry(event) {
+            const dataString = new TextDecoder().decode(event.target.value).trim();
+            const segments = dataString.split('|');
+            
+            if (segments[0] && segments[0].startsWith("IMU:")) {
+                const imuParts = segments[0].substring(4).split(',');
+                if (imuParts.length === 5) {
+                    const yawValue = Number(imuParts[0]);
+                    // Extract quaternions for the 3D rotating cube projection matrix
+                    currentQ = [Number(imuParts[1]), Number(imuParts[2]), Number(imuParts[3]), Number(imuParts[4])]; 
+                    
+                    document.getElementById('yawVal').innerText = Math.round(yawValue);
+                    document.getElementById('compass').style.transform = `rotate(${-yawValue}deg)`;
+                    renderCube();
+                }
+            }
+            
+            if (segments[1] && segments[1].startsWith("ENG:")) {
+                const engParts = segments[1].substring(4).split(',');
+                if (engParts.length === 4) {
+                    document.getElementById('ticksL').innerText = engParts[0];
+                    document.getElementById('distL').innerText  = engParts[1];
+                    document.getElementById('ticksR').innerText = engParts[2];
+                    document.getElementById('distR').innerText  = engParts[3];
+                }
+            }
+        }
+
+        function rotateVector(v, q) {
+            const [w, qx, qy, qz] = q;
+            const [x, y, z] = v;
+            const ix = w*x + qy*z - qz*y, iy = w*y + qz*x - qx*z, iz = w*z + qx*y - qy*x, iw = -qx*x - qy*y - qz*z;
+            return [
+                ix*w + iw*-qx + iy*-qz - iz*-qy,
+                iy*w + iw*-qy + iz*-qx - ix*-qz,
+                iz*w + iw*-qz + ix*-qy - iy*-qx
+            ];
+        }
+
+        function renderCube() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const cx = canvas.width / 2, cy = canvas.height / 2;
+            const projected = vertices.map(v => {
+                const r = rotateVector(v, currentQ);
+                return [r[0] + cx, r[1] + cy]; 
+            });
+
+            ctx.strokeStyle = '#4af'; ctx.lineWidth = 2;
+            edges.forEach(([p1, p2]) => {
+                ctx.beginPath(); ctx.moveTo(projected[p1][0], projected[p1][1]);
+                ctx.lineTo(projected[p2][0], projected[p2][1]); ctx.stroke();
+            });
+        }
+
+        function updateSliders() {
+            const valA = document.getElementById('sliderA').value;
+            const valB = document.getElementById('sliderB').value;
+            document.getElementById('valA').innerText = valA; document.getElementById('valB').innerText = valB;
+            sendPayload(`SLIDER:${valA},${valB}`);
+        }
+
+        function resetSliders() {
+            document.getElementById('sliderA').value = 0; document.getElementById('sliderB').value = 0;
+            document.getElementById('valA').innerText = 0; document.getElementById('valB').innerText = 0;
+        }
+
+        function emergencyStop() { resetSliders(); sendPayload("STOP"); }
+        function sendCmd(cmdToken) { resetSliders(); sendPayload(`CMD:${cmdToken}`); }
+
+        async function sendPayload(data) {
+            if (!rxCharacteristic) return;
+            try { await rxCharacteristic.writeValue(new TextEncoder().encode(data + "\n")); } 
+            catch (e) { console.error("Tx Fail", e); }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (!rxCharacteristic || activeKeys[key]) return;
+            if (['w', 'a', 's', 'd'].includes(key)) { activeKeys[key] = true; processWASD(); }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (!rxCharacteristic) return;
+            if (['w', 'a', 's', 'd'].includes(key)) { activeKeys[key] = false; processWASD(); }
+        });
+
+        function processWASD() {
+            let a = 0, b = 0, moving = false;
+            if (activeKeys['w']) { a = 255; b = 255; moving = true; }
+            else if (activeKeys['s']) { a = -255; b = -255; moving = true; }
+            else if (activeKeys['a']) { a = -255; b = 255; moving = true; }
+            else if (activeKeys['d']) { a = 255; b = -255; moving = true; }
+
+            if (moving) {
+                document.getElementById('sliderA').value = a; document.getElementById('sliderB').value = b;
+                document.getElementById('valA').innerText = a; document.getElementById('valB').innerText = b;
+                sendPayload(`SLIDER:${a},${b}`);
+            } else { emergencyStop(); }
+        }
+        
+        setTimeout(initCanvas, 500); 
+    </script>
+</body>
+</html>
