@@ -110,7 +110,7 @@
             </div>
 
             <div class="sub-panel">
-                <div class="sub-panel-title">MEASURED MOTOR CURRENT CONSUMPTION</div>
+                <div class="sub-panel-title">SIMULATED CURRENT CONSUMPTION</div>
                 <div class="meter-rack"><div id="curBar" class="meter-fill"></div></div>
                 <div style="display: flex; justify-content: space-between; font-size: 0.7rem; margin-top: 4px; color: rgba(51,255,102,0.7);">
                     <span>0.15A QUIESCENT</span>
@@ -206,7 +206,7 @@
 
     function processInboundPacket(event) {
         const streamStr = new TextDecoder().decode(event.target.value).trim();
-        const telemetryTokens = streamStr.split('|'); // Layout Schema: YAW|X|Y|CUR|STATE|LIMIT|FAULT_CODE
+        const telemetryTokens = streamStr.split('|'); // YAW|X|Y|CUR|STATE|LIMIT|FAULT_CODE
         if(telemetryTokens.length < 5) return;
 
         const headingAngle = parseFloat(telemetryTokens[0]);
